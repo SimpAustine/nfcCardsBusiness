@@ -2,7 +2,7 @@
   "name": "nfc-review-card",
   "version": "1.0.0",
   "private": true,
-  "description": "NFC Google Review Card management system",
+  "description": "NFC Review Card — scan first, then attach business",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
