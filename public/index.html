@@ -26,15 +26,7 @@
     <p>Manage NFC cards that send customers to a business's Google review page.</p>
   </section>
 
-  <div id="login" class="card">
-    <h2>Admin login</h2>
-    <label>Admin key</label>
-    <input id="key" type="password" placeholder="Enter ADMIN_KEY">
-    <button onclick="login()">Open Dashboard</button>
-    <div id="loginMsg"></div>
-  </div>
-
-  <main id="dashboard" style="display:none">
+  <main id="dashboard">
     <div class="grid">
       <div class="stat"><span class="muted">Businesses</span><b id="sBusinesses">0</b></div>
       <div class="stat"><span class="muted">Cards</span><b id="sCards">0</b></div>
@@ -87,10 +79,8 @@
 </div>
 
 <script>
-let adminKey = sessionStorage.getItem("nfcAdminKey") || "";
-
 function headers(json=true){
-  const h={"x-admin-key":adminKey};
+  const h={};
   if(json) h["content-type"]="application/json";
   return h;
 }
@@ -99,16 +89,6 @@ async function api(url, options={}){
   const data=await r.json().catch(()=>({}));
   if(!r.ok) throw new Error(data.error||"Request failed");
   return data;
-}
-async function login(){
-  adminKey=document.getElementById("key").value.trim();
-  try{
-    await api("/api/stats");
-    sessionStorage.setItem("nfcAdminKey",adminKey);
-    document.getElementById("login").style.display="none";
-    document.getElementById("dashboard").style.display="block";
-    loadAll();
-  }catch(e){document.getElementById("loginMsg").innerHTML='<p class="error">'+e.message+"</p>";}
 }
 async function addBusiness(){
   try{
@@ -163,17 +143,13 @@ async function loadAll(){
       <table><thead><tr><th>Card</th><th>Business</th><th>Time</th></tr></thead>
       <tbody>${stats.recent.map(x=>`<tr><td>${escapeHtml(x.card_id)}</td><td>${escapeHtml(x.business_name||"")}</td><td>${escapeHtml(x.created_at)}</td></tr>`).join("")}</tbody></table>` : '<p class="muted">No taps yet.</p>';
   }catch(e){
-    if(e.message==="Unauthorized"){
-      sessionStorage.removeItem("nfcAdminKey");
-      document.getElementById("login").style.display="block";
-      document.getElementById("dashboard").style.display="none";
-    }
+    console.error(e);
   }
 }
 function escapeHtml(s){
   return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
 }
-if(adminKey){document.getElementById("key").value=adminKey;login();}
+loadAll();
 </script>
 </body>
 </html>
