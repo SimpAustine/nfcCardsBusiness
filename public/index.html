@@ -6,16 +6,30 @@
   <title>NFC Review Card</title>
   <style>
     *{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;background:#f5f7fb;color:#182033}
-    .wrap{max-width:1100px;margin:auto;padding:28px}.hero{background:#111827;color:white;border-radius:22px;padding:28px;margin-bottom:20px}
+    .wrap{max-width:1100px;margin:auto;padding:28px}
+    .hero{background:#111827;color:white;border-radius:22px;padding:28px;margin-bottom:20px}
     .hero h1{margin:0 0 8px;font-size:32px}.hero p{margin:0;color:#cbd5e1}
-    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}.stat{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px}.stat b{font-size:28px;display:block}
+    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}
+    .stat{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px}.stat b{font-size:28px;display:block}
     .card{background:white;border:1px solid #e5e7eb;border-radius:18px;padding:20px;margin:16px 0}.card h2{margin-top:0}
-    label{display:block;font-weight:700;margin:12px 0 6px}input,select{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:10px;font-size:15px}
+    label{display:block;font-weight:700;margin:12px 0 6px}
+    input,select{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:10px;font-size:15px}
     button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;cursor:pointer;background:#111827;color:white;margin-top:12px}
-    button.secondary{background:#e5e7eb;color:#111827}.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    button.secondary{background:#e5e7eb;color:#111827}
+    button.claim{background:#2563eb;margin-top:0;padding:8px 12px;font-size:13px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
     table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:11px;border-bottom:1px solid #eee;font-size:14px}
-    .muted{color:#667085}.pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#e9f8ef;color:#157347;font-size:12px;font-weight:700}
-    .error{color:#b42318;margin-top:10px}.success{color:#157347;margin-top:10px}.url{word-break:break-all;background:#f3f4f6;padding:10px;border-radius:8px}
+    .muted{color:#667085}
+    .pill{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700}
+    .pill-on{background:#e9f8ef;color:#157347}
+    .pill-off{background:#f3f4f6;color:#667085}
+    .pill-pending{background:#fff7ed;color:#c2410c}
+    .pill-plat{background:#eff6ff;color:#1d4ed8}
+    .error{color:#b42318;margin-top:10px}.success{color:#157347;margin-top:10px}
+    .url{word-break:break-all;background:#f3f4f6;padding:10px;border-radius:8px;margin-top:8px}
+    .hint{font-size:13px;color:#667085;margin-top:6px}
+    .step{background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;padding:14px;margin-bottom:14px;font-size:14px;color:#475569}
+    .step b{color:#111827}
     @media(max-width:800px){.grid{grid-template-columns:1fr 1fr}.row{grid-template-columns:1fr}table{display:block;overflow:auto}}
   </style>
 </head>
@@ -23,47 +37,57 @@
 <div class="wrap">
   <section class="hero">
     <h1>NFC Review Card</h1>
-    <p>Manage NFC cards that send customers to a business's Google review page.</p>
+    <p>Scan the card first, then attach a business and destination link (Google, Facebook, Instagram, or TikTok).</p>
   </section>
 
-  <main id="dashboard">
+  <main>
     <div class="grid">
-      <div class="stat"><span class="muted">Businesses</span><b id="sBusinesses">0</b></div>
       <div class="stat"><span class="muted">Cards</span><b id="sCards">0</b></div>
       <div class="stat"><span class="muted">Active</span><b id="sActive">0</b></div>
-      <div class="stat"><span class="muted">Taps</span><b id="sScans">0</b></div>
+      <div class="stat"><span class="muted">Pending scans</span><b id="sPending">0</b></div>
+      <div class="stat"><span class="muted">Total taps</span><b id="sScans">0</b></div>
     </div>
 
     <section class="card">
-      <h2>Add business</h2>
+      <h2>1. Scan / enter card ID first</h2>
+      <div class="step">
+        Write <b>https://YOUR-DOMAIN/c/CARD-ID</b> onto a blank NFC tag, then tap it once.
+        The scan appears under <b>Pending cards</b> below — or type the Card ID manually.
+      </div>
+      <label>Card ID</label>
+      <input id="cardId" placeholder="e.g. ABC123456 — from NFC scan or pending list">
+      <p class="hint">Card ID must be entered before you can save a business to this card.</p>
+    </section>
+
+    <section class="card">
+      <h2>2. Attach business &amp; destination</h2>
       <div class="row">
         <div>
           <label>Business name</label>
           <input id="bizName" placeholder="Juan's Coffee">
         </div>
         <div>
-          <label>Google review URL</label>
-          <input id="reviewUrl" placeholder="https://g.page/.../review">
+          <label>Platform</label>
+          <select id="platform" onchange="updateUrlHint()">
+            <option value="google">Google Review</option>
+            <option value="facebook">Facebook Page</option>
+            <option value="instagram">Instagram</option>
+            <option value="tiktok">TikTok</option>
+            <option value="other">Other / Custom URL</option>
+          </select>
         </div>
       </div>
-      <button onclick="addBusiness()">Save Business</button>
-      <div id="bizMsg"></div>
+      <label id="urlLabel">Google review URL</label>
+      <input id="destUrl" placeholder="https://g.page/.../review">
+      <p class="hint" id="urlHint">Paste the business Google review-request link.</p>
+      <button onclick="registerCard()">Save business onto this card</button>
+      <div id="regMsg"></div>
     </section>
 
     <section class="card">
-      <h2>Register NFC card</h2>
-      <div class="row">
-        <div>
-          <label>Card ID</label>
-          <input id="cardId" placeholder="ABC123456">
-        </div>
-        <div>
-          <label>Business</label>
-          <select id="businessSelect"></select>
-        </div>
-      </div>
-      <button onclick="addCard()">Register Card</button>
-      <div id="cardMsg"></div>
+      <h2>Pending cards (scanned but not registered)</h2>
+      <p class="hint">These Card IDs were tapped before registration. Click <b>Use this card</b> to fill step 1, then complete step 2.</p>
+      <div id="pendingTable"></div>
     </section>
 
     <section class="card">
@@ -79,77 +103,126 @@
 </div>
 
 <script>
-function headers(json=true){
-  const h={};
-  if(json) h["content-type"]="application/json";
-  return h;
+const PLATFORM_LABELS = { google:"Google Review", facebook:"Facebook", instagram:"Instagram", tiktok:"TikTok", other:"Other" };
+const PLATFORM_HINTS = {
+  google: { label:"Google review URL", placeholder:"https://g.page/.../review", hint:"Paste the business Google review-request link." },
+  facebook: { label:"Facebook page URL", placeholder:"https://facebook.com/yourpage", hint:"Paste the Facebook page link." },
+  instagram: { label:"Instagram profile URL", placeholder:"https://instagram.com/yourbusiness", hint:"Paste the Instagram profile link." },
+  tiktok: { label:"TikTok profile URL", placeholder:"https://tiktok.com/@yourbusiness", hint:"Paste the TikTok profile link." },
+  other: { label:"Destination URL", placeholder:"https://...", hint:"Any https link customers should open after tapping the card." }
+};
+
+function updateUrlHint() {
+  const p = document.getElementById("platform").value;
+  const h = PLATFORM_HINTS[p] || PLATFORM_HINTS.other;
+  document.getElementById("urlLabel").textContent = h.label;
+  document.getElementById("destUrl").placeholder = h.placeholder;
+  document.getElementById("urlHint").textContent = h.hint;
 }
-async function api(url, options={}){
-  const r=await fetch(url,{...options,headers:{...headers(!!options.body),...(options.headers||{})}});
-  const data=await r.json().catch(()=>({}));
-  if(!r.ok) throw new Error(data.error||"Request failed");
+
+async function api(url, options = {}) {
+  const headers = {};
+  if (options.body) headers["content-type"] = "application/json";
+  const r = await fetch(url, { ...options, headers: { ...headers, ...(options.headers || {}) } });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || "Request failed");
   return data;
 }
-async function addBusiness(){
-  try{
-    const data=await api("/api/businesses",{method:"POST",body:JSON.stringify({
-      name:document.getElementById("bizName").value,
-      googleReviewUrl:document.getElementById("reviewUrl").value
-    })});
-    document.getElementById("bizMsg").innerHTML='<p class="success">Business saved. ID: '+data.id+"</p>";
-    document.getElementById("bizName").value="";
-    document.getElementById("reviewUrl").value="";
+
+function usePendingCard(cardId) {
+  document.getElementById("cardId").value = cardId;
+  document.getElementById("cardId").focus();
+  document.getElementById("bizName").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+async function registerCard() {
+  const cardId = document.getElementById("cardId").value.trim();
+  if (!cardId) {
+    document.getElementById("regMsg").innerHTML = '<p class="error">Scan or enter the Card ID first (step 1).</p>';
+    document.getElementById("cardId").focus();
+    return;
+  }
+  try {
+    const data = await api("/api/cards", {
+      method: "POST",
+      body: JSON.stringify({
+        cardId,
+        businessName: document.getElementById("bizName").value,
+        platform: document.getElementById("platform").value,
+        destinationUrl: document.getElementById("destUrl").value
+      })
+    });
+    document.getElementById("regMsg").innerHTML =
+      '<p class="success">Saved. Write this URL to the NFC tag (if not already written):</p><div class="url">' +
+      escapeHtml(data.url) + "</div>";
+    document.getElementById("cardId").value = "";
+    document.getElementById("bizName").value = "";
+    document.getElementById("destUrl").value = "";
     loadAll();
-  }catch(e){document.getElementById("bizMsg").innerHTML='<p class="error">'+e.message+"</p>";}
-}
-async function addCard(){
-  try{
-    const data=await api("/api/cards",{method:"POST",body:JSON.stringify({
-      cardId:document.getElementById("cardId").value,
-      businessId:Number(document.getElementById("businessSelect").value)
-    })});
-    document.getElementById("cardMsg").innerHTML='<p class="success">Card registered. Write this URL to the NFC tag:</p><div class="url">'+data.url+"</div>";
-    document.getElementById("cardId").value="";
-    loadAll();
-  }catch(e){document.getElementById("cardMsg").innerHTML='<p class="error">'+e.message+"</p>";}
-}
-async function toggleCard(id,active){
-  await api("/api/cards/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({active:!active})});
-  loadAll();
-}
-async function loadAll(){
-  try{
-    const [stats,biz,cards]=await Promise.all([
-      api("/api/stats"),api("/api/businesses"),api("/api/cards")
-    ]);
-    document.getElementById("sBusinesses").textContent=stats.businesses;
-    document.getElementById("sCards").textContent=stats.cards;
-    document.getElementById("sActive").textContent=stats.activeCards;
-    document.getElementById("sScans").textContent=stats.scans;
-
-    document.getElementById("businessSelect").innerHTML=biz.map(b=>`<option value="${b.id}">${escapeHtml(b.name)}</option>`).join("");
-
-    document.getElementById("cardsTable").innerHTML = cards.length ? `
-      <table><thead><tr><th>Card</th><th>Business</th><th>Taps</th><th>Status</th><th>Action</th></tr></thead>
-      <tbody>${cards.map(c=>`<tr>
-        <td><b>${escapeHtml(c.card_id)}</b></td>
-        <td>${escapeHtml(c.business_name)}</td>
-        <td>${c.scans}</td>
-        <td>${c.active?'<span class="pill">Active</span>':'Disabled'}</td>
-        <td><button class="secondary" onclick="toggleCard('${encodeURIComponent(c.card_id)}',${!!c.active})">${c.active?'Disable':'Enable'}</button></td>
-      </tr>`).join("")}</tbody></table>` : '<p class="muted">No cards yet.</p>';
-
-    document.getElementById("recent").innerHTML = stats.recent.length ? `
-      <table><thead><tr><th>Card</th><th>Business</th><th>Time</th></tr></thead>
-      <tbody>${stats.recent.map(x=>`<tr><td>${escapeHtml(x.card_id)}</td><td>${escapeHtml(x.business_name||"")}</td><td>${escapeHtml(x.created_at)}</td></tr>`).join("")}</tbody></table>` : '<p class="muted">No taps yet.</p>';
-  }catch(e){
-    console.error(e);
+  } catch (e) {
+    document.getElementById("regMsg").innerHTML = '<p class="error">' + escapeHtml(e.message) + "</p>";
   }
 }
-function escapeHtml(s){
-  return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+
+async function toggleCard(id, active) {
+  await api("/api/cards/" + encodeURIComponent(id), {
+    method: "PATCH",
+    body: JSON.stringify({ active: !active })
+  });
+  loadAll();
 }
+
+async function loadAll() {
+  try {
+    const [stats, cards, pending] = await Promise.all([
+      api("/api/stats"), api("/api/cards"), api("/api/pending")
+    ]);
+    document.getElementById("sCards").textContent = stats.cards;
+    document.getElementById("sActive").textContent = stats.activeCards;
+    document.getElementById("sPending").textContent = stats.pending;
+    document.getElementById("sScans").textContent = stats.scans;
+
+    document.getElementById("pendingTable").innerHTML = pending.length
+      ? `<table><thead><tr><th>Card ID</th><th>Scans</th><th>Last scan</th><th></th></tr></thead>
+         <tbody>${pending.map(p => `<tr>
+           <td><b>${escapeHtml(p.card_id)}</b> <span class="pill pill-pending">Pending</span></td>
+           <td>${p.scan_count}</td>
+           <td>${escapeHtml(p.last_scan)}</td>
+           <td><button class="claim" onclick="usePendingCard('${escapeHtml(p.card_id)}')">Use this card</button></td>
+         </tr>`).join("")}</tbody></table>`
+      : '<p class="muted">No unregistered scans yet. Tap a blank NFC card that points to /c/YOUR-CARD-ID to see it here.</p>';
+
+    document.getElementById("cardsTable").innerHTML = cards.length
+      ? `<table><thead><tr><th>Card</th><th>Business</th><th>Platform</th><th>Taps</th><th>Status</th><th></th></tr></thead>
+         <tbody>${cards.map(c => `<tr>
+           <td><b>${escapeHtml(c.card_id)}</b></td>
+           <td>${escapeHtml(c.business_name)}</td>
+           <td><span class="pill pill-plat">${escapeHtml(PLATFORM_LABELS[c.platform] || c.platform)}</span></td>
+           <td>${c.scans}</td>
+           <td>${c.active ? '<span class="pill pill-on">Active</span>' : '<span class="pill pill-off">Disabled</span>'}</td>
+           <td><button class="secondary" onclick="toggleCard('${encodeURIComponent(c.card_id)}',${!!c.active})">${c.active ? "Disable" : "Enable"}</button></td>
+         </tr>`).join("")}</tbody></table>`
+      : '<p class="muted">No registered cards yet.</p>';
+
+    document.getElementById("recent").innerHTML = stats.recent.length
+      ? `<table><thead><tr><th>Card</th><th>Business</th><th>Status</th><th>Time</th></tr></thead>
+         <tbody>${stats.recent.map(x => `<tr>
+           <td>${escapeHtml(x.card_id)}</td>
+           <td>${escapeHtml(x.business_name || "—")}</td>
+           <td>${x.registered ? '<span class="pill pill-on">Registered</span>' : '<span class="pill pill-pending">Pending</span>'}</td>
+           <td>${escapeHtml(x.created_at)}</td>
+         </tr>`).join("")}</tbody></table>`
+      : '<p class="muted">No taps yet.</p>';
+  } catch (e) { console.error(e); }
+}
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));
+}
+
+updateUrlHint();
 loadAll();
+setInterval(loadAll, 15000);
 </script>
 </body>
 </html>
