@@ -15,20 +15,14 @@ const db = new Database(path.join(dataDir, "review-card.db"));
 db.pragma("journal_mode = WAL");
 
 db.exec(`
-CREATE TABLE IF NOT EXISTS businesses (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  google_review_url TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE IF NOT EXISTS cards (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   card_id TEXT NOT NULL UNIQUE,
-  business_id INTEGER NOT NULL,
+  business_name TEXT NOT NULL,
+  platform TEXT NOT NULL DEFAULT 'google',
+  destination_url TEXT NOT NULL,
   active INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (business_id) REFERENCES businesses(id)
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS scans (
@@ -43,6 +37,8 @@ CREATE TABLE IF NOT EXISTS scans (
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
+
+const PLATFORMS = new Set(["google", "facebook", "instagram", "tiktok", "other"]);
 
 function validUrl(value) {
   try {
@@ -61,75 +57,56 @@ function hashIp(ip) {
   return crypto.createHash("sha256").update(`${ip}|nfc-review-card`).digest("hex");
 }
 
-// Public card endpoint: this is what the NFC tag points to.
-app.get("/c/:cardId", (req, res) => {
-  const cardId = normalizeCardId(req.params.cardId);
-
-  const row = db.prepare(`
-    SELECT c.card_id, c.active, b.google_review_url, b.name
-    FROM cards c
-    JOIN businesses b ON b.id = c.business_id
-    WHERE c.card_id = ?
-  `).get(cardId);
-
-  if (!row || !row.active) {
-    return res.status(404).send(`
-      <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-      <title>Card unavailable</title></head>
-      <body style="font-family:system-ui;text-align:center;padding:40px">
-      <h1>Card unavailable</h1><p>This review card is not active.</p>
-      </body></html>
-    `);
-  }
-
+function recordScan(cardId, req) {
   db.prepare(`
     INSERT INTO scans (card_id, user_agent, ip_hash)
     VALUES (?, ?, ?)
-  `).run(
-    cardId,
-    req.get("user-agent") || "",
-    hashIp(req.ip || "")
-  );
+  `).run(cardId, req.get("user-agent") || "", hashIp(req.ip || ""));
+}
 
-  return res.redirect(row.google_review_url);
-});
+// NFC tags point here. Always log the scan first, then redirect if registered.
+app.get("/c/:cardId", (req, res) => {
+  const cardId = normalizeCardId(req.params.cardId);
+  if (!cardId) return res.status(400).send("Invalid card");
 
-app.get("/api/businesses", (req, res) => {
-  const rows = db.prepare(`
-    SELECT b.id, b.name, b.google_review_url, b.created_at,
-           COUNT(c.id) AS card_count
-    FROM businesses b
-    LEFT JOIN cards c ON c.business_id = b.id
-    GROUP BY b.id
-    ORDER BY b.id DESC
-  `).all();
-  res.json(rows);
-});
+  recordScan(cardId, req);
 
-app.post("/api/businesses", (req, res) => {
-  const name = String(req.body.name || "").trim();
-  const googleReviewUrl = String(req.body.googleReviewUrl || "").trim();
+  const row = db.prepare(`
+    SELECT card_id, active, business_name, platform, destination_url
+    FROM cards WHERE card_id = ?
+  `).get(cardId);
 
-  if (!name) return res.status(400).json({ error: "Business name is required" });
-  if (!validUrl(googleReviewUrl)) {
-    return res.status(400).json({ error: "Enter a valid Google review URL" });
+  if (!row) {
+    return res.status(404).send(`<!doctype html><html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Card not registered</title>
+<style>body{font-family:system-ui;text-align:center;padding:40px;color:#182033}
+.id{background:#f3f4f6;padding:10px 14px;border-radius:8px;display:inline-block;margin-top:12px;font-family:monospace}</style>
+</head><body>
+<h1>Card scanned</h1>
+<p>This NFC card is not registered yet.</p>
+<div class="id">${cardId}</div>
+<p style="color:#667085;margin-top:20px">Open the dashboard to register this card and attach a business.</p>
+</body></html>`);
   }
 
-  const result = db.prepare(`
-    INSERT INTO businesses (name, google_review_url)
-    VALUES (?, ?)
-  `).run(name, googleReviewUrl);
+  if (!row.active) {
+    return res.status(404).send(`<!doctype html><html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Card unavailable</title></head>
+<body style="font-family:system-ui;text-align:center;padding:40px">
+<h1>Card unavailable</h1><p>This card is currently disabled.</p>
+</body></html>`);
+  }
 
-  res.json({ id: result.lastInsertRowid });
+  return res.redirect(row.destination_url);
 });
 
 app.get("/api/cards", (req, res) => {
   const rows = db.prepare(`
-    SELECT c.id, c.card_id, c.active, c.created_at,
-           b.id AS business_id, b.name AS business_name,
-           COUNT(s.id) AS scans
+    SELECT c.id, c.card_id, c.business_name, c.platform, c.destination_url,
+           c.active, c.created_at, COUNT(s.id) AS scans
     FROM cards c
-    JOIN businesses b ON b.id = c.business_id
     LEFT JOIN scans s ON s.card_id = c.card_id
     GROUP BY c.id
     ORDER BY c.id DESC
@@ -137,63 +114,100 @@ app.get("/api/cards", (req, res) => {
   res.json(rows);
 });
 
+// Card ID first, then business + platform link
 app.post("/api/cards", (req, res) => {
   const cardId = normalizeCardId(req.body.cardId);
-  const businessId = Number(req.body.businessId);
+  const businessName = String(req.body.businessName || "").trim();
+  const platform = String(req.body.platform || "google").toLowerCase();
+  const destinationUrl = String(req.body.destinationUrl || "").trim();
 
-  if (!cardId) return res.status(400).json({ error: "Card ID is required" });
-  if (!Number.isInteger(businessId) || businessId < 1) {
-    return res.status(400).json({ error: "Valid business is required" });
-  }
-
-  const business = db.prepare("SELECT id FROM businesses WHERE id = ?").get(businessId);
-  if (!business) return res.status(404).json({ error: "Business not found" });
+  if (!cardId) return res.status(400).json({ error: "Card ID is required — scan or enter the card first" });
+  if (!businessName) return res.status(400).json({ error: "Business name is required" });
+  if (!PLATFORMS.has(platform)) return res.status(400).json({ error: "Invalid platform" });
+  if (!validUrl(destinationUrl)) return res.status(400).json({ error: "Enter a valid URL (https://...)" });
 
   try {
     db.prepare(`
-      INSERT INTO cards (card_id, business_id)
-      VALUES (?, ?)
-    `).run(cardId, businessId);
+      INSERT INTO cards (card_id, business_name, platform, destination_url)
+      VALUES (?, ?, ?, ?)
+    `).run(cardId, businessName, platform, destinationUrl);
+
     res.json({
       cardId,
+      businessName,
+      platform,
       url: `${BASE_URL}/c/${encodeURIComponent(cardId)}`
     });
   } catch (err) {
     if (String(err.message).includes("UNIQUE")) {
       return res.status(409).json({ error: "That card ID is already registered" });
     }
-    res.status(500).json({ error: "Could not create card" });
+    res.status(500).json({ error: "Could not register card" });
   }
 });
 
 app.patch("/api/cards/:cardId", (req, res) => {
   const cardId = normalizeCardId(req.params.cardId);
-  const active = req.body.active ? 1 : 0;
+  const existing = db.prepare("SELECT * FROM cards WHERE card_id = ?").get(cardId);
+  if (!existing) return res.status(404).json({ error: "Card not found" });
 
-  const result = db.prepare(`
-    UPDATE cards SET active = ? WHERE card_id = ?
-  `).run(active, cardId);
+  if (req.body.active !== undefined) {
+    db.prepare("UPDATE cards SET active = ? WHERE card_id = ?").run(req.body.active ? 1 : 0, cardId);
+    return res.json({ ok: true });
+  }
 
-  if (!result.changes) return res.status(404).json({ error: "Card not found" });
+  const businessName = req.body.businessName !== undefined
+    ? String(req.body.businessName || "").trim() : existing.business_name;
+  const platform = req.body.platform !== undefined
+    ? String(req.body.platform || "google").toLowerCase() : existing.platform;
+  const destinationUrl = req.body.destinationUrl !== undefined
+    ? String(req.body.destinationUrl || "").trim() : existing.destination_url;
+
+  if (!businessName) return res.status(400).json({ error: "Business name is required" });
+  if (!PLATFORMS.has(platform)) return res.status(400).json({ error: "Invalid platform" });
+  if (!validUrl(destinationUrl)) return res.status(400).json({ error: "Enter a valid URL" });
+
+  db.prepare(`
+    UPDATE cards SET business_name = ?, platform = ?, destination_url = ?
+    WHERE card_id = ?
+  `).run(businessName, platform, destinationUrl, cardId);
+
   res.json({ ok: true });
 });
 
+app.get("/api/pending", (req, res) => {
+  const rows = db.prepare(`
+    SELECT s.card_id, COUNT(*) AS scan_count, MAX(s.created_at) AS last_scan
+    FROM scans s
+    LEFT JOIN cards c ON c.card_id = s.card_id
+    WHERE c.id IS NULL
+    GROUP BY s.card_id
+    ORDER BY last_scan DESC
+    LIMIT 50
+  `).all();
+  res.json(rows);
+});
+
 app.get("/api/stats", (req, res) => {
-  const businesses = db.prepare("SELECT COUNT(*) AS n FROM businesses").get().n;
   const cards = db.prepare("SELECT COUNT(*) AS n FROM cards").get().n;
   const activeCards = db.prepare("SELECT COUNT(*) AS n FROM cards WHERE active = 1").get().n;
   const scans = db.prepare("SELECT COUNT(*) AS n FROM scans").get().n;
+  const pending = db.prepare(`
+    SELECT COUNT(DISTINCT s.card_id) AS n
+    FROM scans s LEFT JOIN cards c ON c.card_id = s.card_id
+    WHERE c.id IS NULL
+  `).get().n;
 
   const recent = db.prepare(`
-    SELECT s.card_id, b.name AS business_name, s.created_at
+    SELECT s.card_id, c.business_name, c.platform, s.created_at,
+           CASE WHEN c.id IS NULL THEN 0 ELSE 1 END AS registered
     FROM scans s
     LEFT JOIN cards c ON c.card_id = s.card_id
-    LEFT JOIN businesses b ON b.id = c.business_id
     ORDER BY s.id DESC
-    LIMIT 20
+    LIMIT 25
   `).all();
 
-  res.json({ businesses, cards, activeCards, scans, recent });
+  res.json({ cards, activeCards, scans, pending, recent });
 });
 
 app.get("*", (req, res, next) => {
