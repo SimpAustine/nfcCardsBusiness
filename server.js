@@ -5,7 +5,6 @@ const crypto = require("crypto");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const ADMIN_KEY = process.env.ADMIN_KEY || "change-this-admin-key";
 const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, "");
 
 const dataDir = path.join(__dirname, "data");
@@ -45,14 +44,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
-function requireAdmin(req, res, next) {
-  const key = req.get("x-admin-key") || req.query.key || req.body.adminKey;
-  if (!key || key !== ADMIN_KEY) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  next();
-}
-
 function validUrl(value) {
   try {
     const u = new URL(value);
@@ -67,7 +58,7 @@ function normalizeCardId(value) {
 }
 
 function hashIp(ip) {
-  return crypto.createHash("sha256").update(`${ip}|${ADMIN_KEY}`).digest("hex");
+  return crypto.createHash("sha256").update(`${ip}|nfc-review-card`).digest("hex");
 }
 
 // Public card endpoint: this is what the NFC tag points to.
@@ -103,7 +94,7 @@ app.get("/c/:cardId", (req, res) => {
   return res.redirect(row.google_review_url);
 });
 
-app.get("/api/businesses", requireAdmin, (req, res) => {
+app.get("/api/businesses", (req, res) => {
   const rows = db.prepare(`
     SELECT b.id, b.name, b.google_review_url, b.created_at,
            COUNT(c.id) AS card_count
@@ -115,7 +106,7 @@ app.get("/api/businesses", requireAdmin, (req, res) => {
   res.json(rows);
 });
 
-app.post("/api/businesses", requireAdmin, (req, res) => {
+app.post("/api/businesses", (req, res) => {
   const name = String(req.body.name || "").trim();
   const googleReviewUrl = String(req.body.googleReviewUrl || "").trim();
 
@@ -132,7 +123,7 @@ app.post("/api/businesses", requireAdmin, (req, res) => {
   res.json({ id: result.lastInsertRowid });
 });
 
-app.get("/api/cards", requireAdmin, (req, res) => {
+app.get("/api/cards", (req, res) => {
   const rows = db.prepare(`
     SELECT c.id, c.card_id, c.active, c.created_at,
            b.id AS business_id, b.name AS business_name,
@@ -146,7 +137,7 @@ app.get("/api/cards", requireAdmin, (req, res) => {
   res.json(rows);
 });
 
-app.post("/api/cards", requireAdmin, (req, res) => {
+app.post("/api/cards", (req, res) => {
   const cardId = normalizeCardId(req.body.cardId);
   const businessId = Number(req.body.businessId);
 
@@ -175,7 +166,7 @@ app.post("/api/cards", requireAdmin, (req, res) => {
   }
 });
 
-app.patch("/api/cards/:cardId", requireAdmin, (req, res) => {
+app.patch("/api/cards/:cardId", (req, res) => {
   const cardId = normalizeCardId(req.params.cardId);
   const active = req.body.active ? 1 : 0;
 
@@ -187,7 +178,7 @@ app.patch("/api/cards/:cardId", requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/stats", requireAdmin, (req, res) => {
+app.get("/api/stats", (req, res) => {
   const businesses = db.prepare("SELECT COUNT(*) AS n FROM businesses").get().n;
   const cards = db.prepare("SELECT COUNT(*) AS n FROM cards").get().n;
   const activeCards = db.prepare("SELECT COUNT(*) AS n FROM cards WHERE active = 1").get().n;
