@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NFC Review Card</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;background:#f5f7fb;color:#182033}
+    .wrap{max-width:1100px;margin:auto;padding:28px}.hero{background:#111827;color:white;border-radius:22px;padding:28px;margin-bottom:20px}
+    .hero h1{margin:0 0 8px;font-size:32px}.hero p{margin:0;color:#cbd5e1}
+    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}.stat{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px}.stat b{font-size:28px;display:block}
+    .card{background:white;border:1px solid #e5e7eb;border-radius:18px;padding:20px;margin:16px 0}.card h2{margin-top:0}
+    label{display:block;font-weight:700;margin:12px 0 6px}input,select{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:10px;font-size:15px}
+    button{border:0;border-radius:10px;padding:11px 15px;font-weight:700;cursor:pointer;background:#111827;color:white;margin-top:12px}
+    button.secondary{background:#e5e7eb;color:#111827}.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:11px;border-bottom:1px solid #eee;font-size:14px}
+    .muted{color:#667085}.pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#e9f8ef;color:#157347;font-size:12px;font-weight:700}
+    .error{color:#b42318;margin-top:10px}.success{color:#157347;margin-top:10px}.url{word-break:break-all;background:#f3f4f6;padding:10px;border-radius:8px}
+    @media(max-width:800px){.grid{grid-template-columns:1fr 1fr}.row{grid-template-columns:1fr}table{display:block;overflow:auto}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <section class="hero">
+    <h1>NFC Review Card</h1>
+    <p>Manage NFC cards that send customers to a business's Google review page.</p>
+  </section>
+
+  <div id="login" class="card">
+    <h2>Admin login</h2>
+    <label>Admin key</label>
+    <input id="key" type="password" placeholder="Enter ADMIN_KEY">
+    <button onclick="login()">Open Dashboard</button>
+    <div id="loginMsg"></div>
+  </div>
+
+  <main id="dashboard" style="display:none">
+    <div class="grid">
+      <div class="stat"><span class="muted">Businesses</span><b id="sBusinesses">0</b></div>
+      <div class="stat"><span class="muted">Cards</span><b id="sCards">0</b></div>
+      <div class="stat"><span class="muted">Active</span><b id="sActive">0</b></div>
+      <div class="stat"><span class="muted">Taps</span><b id="sScans">0</b></div>
+    </div>
+
+    <section class="card">
+      <h2>Add business</h2>
+      <div class="row">
+        <div>
+          <label>Business name</label>
+          <input id="bizName" placeholder="Juan's Coffee">
+        </div>
+        <div>
+          <label>Google review URL</label>
+          <input id="reviewUrl" placeholder="https://g.page/.../review">
+        </div>
+      </div>
+      <button onclick="addBusiness()">Save Business</button>
+      <div id="bizMsg"></div>
+    </section>
+
+    <section class="card">
+      <h2>Register NFC card</h2>
+      <div class="row">
+        <div>
+          <label>Card ID</label>
+          <input id="cardId" placeholder="ABC123456">
+        </div>
+        <div>
+          <label>Business</label>
+          <select id="businessSelect"></select>
+        </div>
+      </div>
+      <button onclick="addCard()">Register Card</button>
+      <div id="cardMsg"></div>
+    </section>
+
+    <section class="card">
+      <h2>Registered cards</h2>
+      <div id="cardsTable"></div>
+    </section>
+
+    <section class="card">
+      <h2>Recent taps</h2>
+      <div id="recent"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+let adminKey = sessionStorage.getItem("nfcAdminKey") || "";
+
+function headers(json=true){
+  const h={"x-admin-key":adminKey};
+  if(json) h["content-type"]="application/json";
+  return h;
+}
+async function api(url, options={}){
+  const r=await fetch(url,{...options,headers:{...headers(!!options.body),...(options.headers||{})}});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(data.error||"Request failed");
+  return data;
+}
+async function login(){
+  adminKey=document.getElementById("key").value.trim();
+  try{
+    await api("/api/stats");
+    sessionStorage.setItem("nfcAdminKey",adminKey);
+    document.getElementById("login").style.display="none";
+    document.getElementById("dashboard").style.display="block";
+    loadAll();
+  }catch(e){document.getElementById("loginMsg").innerHTML='<p class="error">'+e.message+"</p>";}
+}
+async function addBusiness(){
+  try{
+    const data=await api("/api/businesses",{method:"POST",body:JSON.stringify({
+      name:document.getElementById("bizName").value,
+      googleReviewUrl:document.getElementById("reviewUrl").value
+    })});
+    document.getElementById("bizMsg").innerHTML='<p class="success">Business saved. ID: '+data.id+"</p>";
+    document.getElementById("bizName").value="";
+    document.getElementById("reviewUrl").value="";
+    loadAll();
+  }catch(e){document.getElementById("bizMsg").innerHTML='<p class="error">'+e.message+"</p>";}
+}
+async function addCard(){
+  try{
+    const data=await api("/api/cards",{method:"POST",body:JSON.stringify({
+      cardId:document.getElementById("cardId").value,
+      businessId:Number(document.getElementById("businessSelect").value)
+    })});
+    document.getElementById("cardMsg").innerHTML='<p class="success">Card registered. Write this URL to the NFC tag:</p><div class="url">'+data.url+"</div>";
+    document.getElementById("cardId").value="";
+    loadAll();
+  }catch(e){document.getElementById("cardMsg").innerHTML='<p class="error">'+e.message+"</p>";}
+}
+async function toggleCard(id,active){
+  await api("/api/cards/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({active:!active})});
+  loadAll();
+}
+async function loadAll(){
+  try{
+    const [stats,biz,cards]=await Promise.all([
+      api("/api/stats"),api("/api/businesses"),api("/api/cards")
+    ]);
+    document.getElementById("sBusinesses").textContent=stats.businesses;
+    document.getElementById("sCards").textContent=stats.cards;
+    document.getElementById("sActive").textContent=stats.activeCards;
+    document.getElementById("sScans").textContent=stats.scans;
+
+    document.getElementById("businessSelect").innerHTML=biz.map(b=>`<option value="${b.id}">${escapeHtml(b.name)}</option>`).join("");
+
+    document.getElementById("cardsTable").innerHTML = cards.length ? `
+      <table><thead><tr><th>Card</th><th>Business</th><th>Taps</th><th>Status</th><th>Action</th></tr></thead>
+      <tbody>${cards.map(c=>`<tr>
+        <td><b>${escapeHtml(c.card_id)}</b></td>
+        <td>${escapeHtml(c.business_name)}</td>
+        <td>${c.scans}</td>
+        <td>${c.active?'<span class="pill">Active</span>':'Disabled'}</td>
+        <td><button class="secondary" onclick="toggleCard('${encodeURIComponent(c.card_id)}',${!!c.active})">${c.active?'Disable':'Enable'}</button></td>
+      </tr>`).join("")}</tbody></table>` : '<p class="muted">No cards yet.</p>';
+
+    document.getElementById("recent").innerHTML = stats.recent.length ? `
+      <table><thead><tr><th>Card</th><th>Business</th><th>Time</th></tr></thead>
+      <tbody>${stats.recent.map(x=>`<tr><td>${escapeHtml(x.card_id)}</td><td>${escapeHtml(x.business_name||"")}</td><td>${escapeHtml(x.created_at)}</td></tr>`).join("")}</tbody></table>` : '<p class="muted">No taps yet.</p>';
+  }catch(e){
+    if(e.message==="Unauthorized"){
+      sessionStorage.removeItem("nfcAdminKey");
+      document.getElementById("login").style.display="block";
+      document.getElementById("dashboard").style.display="none";
+    }
+  }
+}
+function escapeHtml(s){
+  return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+}
+if(adminKey){document.getElementById("key").value=adminKey;login();}
+</script>
+</body>
+</html>
